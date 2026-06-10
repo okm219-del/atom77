@@ -265,37 +265,6 @@
         </section>
     </main>
 
-    <!-- Footer -->
-    <footer class="mt-12 bg-[#1e293b] text-slate-400 text-center py-6 text-sm border-t-4 border-[#0f172a]">
-        <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <p>© 2026 원자 77 학습형 보드게임. 즐겁게 학습하는 주기율표와 원소들 🧬</p>
-            <p class="text-xs">이 게임은 중2 과학 교과과정 원소 기호 및 번호 학습 보조 도구로 디자인되었습니다.</p>
-        </div>
-    </footer>
-
-    <!-- Exploding Defeat Overlay Alert -->
-    <div id="defeat-modal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden backdrop-blur-sm">
-        <div class="bg-white border-4 border-black rounded-3xl p-8 max-w-md w-full shadow-[8px_8px_0px_rgba(0,0,0,0.15)] text-center relative overflow-hidden transform scale-95 transition-transform duration-300">
-            <!-- Sparks and Explosions -->
-            <div class="text-7xl mb-4 animate-bounce">💥</div>
-            <h2 class="text-3xl font-black text-red-600 mb-2 cute-font" id="defeat-title">쾅!!!! 폭탄 폭발!</h2>
-            
-            <p class="text-slate-600 mb-6 font-medium leading-relaxed">
-                <span id="loser-name" class="font-extrabold text-[#1e293b]">플레이어</span>님이 
-                <span id="bomb-element-info" class="text-red-500 font-black underline decoration-dashed underline-offset-4">10번 네온(Ne)</span> 원자핵 지뢰를 밟아 탈락하였습니다!
-            </p>
-
-            <div class="bg-red-50 border-2 border-red-200 rounded-2xl p-4 mb-6">
-                <p class="text-xs text-red-800 font-bold mb-1">💡 원소 기억하기</p>
-                <p id="defeat-learning-tip" class="text-sm font-semibold text-slate-700">네온(Ne)은 18족 비활성 기체로 빛나는 조명 등에 쓰입니다.</p>
-            </div>
-
-            <button id="modal-close-btn" onclick="closeDefeatModal()" class="w-full py-3.5 bg-red-500 hover:bg-red-600 text-white font-extrabold text-lg rounded-2xl border-2 border-black shadow-[4px_4px_0px_#000] active:translate-y-1 active:shadow-none transition-all">
-                방장 리셋 기다리기 🔄
-            </button>
-        </div>
-    </div>
-
     <!-- Rules Modal -->
     <div id="rule-modal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden backdrop-blur-sm">
         <div class="bg-white border-4 border-[#334155] rounded-3xl p-6 sm:p-8 max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-[8px_8px_0px_#334155]">
@@ -363,7 +332,31 @@
         </div>
     </div>
 
-    <!-- Firebase SDKs -->
+    <!-- ========================================================= -->
+    <!-- 🛡️ 1. 실패 방지 최우선 UI 작동 자바스크립트 영역 (전역 바인딩) -->
+    <!-- ========================================================= -->
+    <script>
+        // 네트워크 연결 및 기타 스크립트 실행 여부와 무관하게 무조건 독립 작동하는 안전 규칙 장치
+        function openRuleModal() {
+            var modal = document.getElementById('rule-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+            }
+        }
+        function closeRuleModal() {
+            var modal = document.getElementById('rule-modal');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+        }
+        // 전역 범위(window)에 즉시 등록하여 HTML inline onclick에서 항시 접근 가능 보장
+        window.openRuleModal = openRuleModal;
+        window.closeRuleModal = closeRuleModal;
+    </script>
+
+    <!-- ========================================================= -->
+    <!-- 🛸 2. 실시간 멀티플레이 네트워크 자바스크립트 영역 (Module) -->
+    <!-- ========================================================= -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -745,7 +738,7 @@
 
                     cardCount.innerText = playerObj.hand ? playerObj.hand.length : 0;
 
-                    // 액티브 턴 및 스타일링 동기화
+                    // :lock: 턴 강조 및 UI 동기화
                     box.className = "bg-white border-2 border-[#334155] rounded-2xl p-3 flex flex-col justify-between transition-all duration-300 shadow-[3px_3px_0px_#334155]";
                     
                     if (roomState.isStarted) {
@@ -1004,23 +997,6 @@
             document.getElementById('game-screen').classList.add('hidden');
             document.getElementById('lobby-screen').classList.remove('hidden');
         }
-
-        // ==========================================
-        // 🔒 규칙 모달 도우미 함수 (전역 Window 바인딩)
-        // ==========================================
-        window.openRuleModal = function() {
-            const modal = document.getElementById('rule-modal');
-            if (modal) {
-                modal.classList.remove('hidden');
-            }
-        };
-
-        window.closeRuleModal = function() {
-            const modal = document.getElementById('rule-modal');
-            if (modal) {
-                modal.classList.add('hidden');
-            }
-        };
 
         // 실행
         renderElementTable();
