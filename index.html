@@ -1005,6 +1005,23 @@
             document.getElementById('lobby-screen').classList.remove('hidden');
         }
 
+        // ==========================================
+        // 🔒 규칙 모달 도우미 함수 (전역 Window 바인딩)
+        // ==========================================
+        window.openRuleModal = function() {
+            const modal = document.getElementById('rule-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+            }
+        };
+
+        window.closeRuleModal = function() {
+            const modal = document.getElementById('rule-modal');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+        };
+
         // 실행
         renderElementTable();
     </script>
