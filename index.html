@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>원자 77 - 실시간 멀티플레이어 원소 보드게임</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for Cute and Clean Look -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #f0f4f8;
+        }
+        .cute-font {
+            font-family: 'Gaegu', sans-serif;
+        }
+        /* Custom pastel shadow and borders */
+        .pastel-card {
+            box-shadow: 0 8px 0px rgba(0, 0, 0, 0.05);
+            border: 3px solid #4a5568;
+        }
+        /* Card hover effect */
+        .game-card {
+            transition: all 0.2s ease;
+        }
+        .game-card:hover:not(.disabled) {
+            transform: translateY(-12px);
+            box-shadow: 0 12px 0px rgba(0, 0, 0, 0.08);
+        }
+        /* Pulse for active player */
+        @keyframes activePulse {
+            0%, 100% { border-color: #fca5a5; box-shadow: 0 0 15px rgba(252, 165, 165, 0.6); }
+            50% { border-color: #f87171; box-shadow: 0 0 25px rgba(248, 113, 113, 0.8); }
+        }
+        .active-player-box {
+            animation: activePulse 2s infinite;
+            border-width: 4px;
+        }
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #edf2f7;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e0;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a0aec0;
+        }
+    </style>
+</head>
+<body class="bg-[#f0f4f8] min-h-screen flex flex-col overflow-x-hidden">
+
+    <!-- Header -->
+    <header class="bg-white border-b-4 border-[#334155] p-4 text-center sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <span class="text-4xl">⚛️</span>
+                <h1 class="text-3xl font-black text-[#334155] tracking-tight cute-font">원자 77 <span class="text-xl text-[#64748b]">Atomic 77 (온라인)</span></h1>
+            </div>
+            <p class="text-sm sm:text-base text-[#475569] font-medium">
+                🧪 여러 기기에서 실시간 멀티플레이! 지뢰 번호(<span class="text-red-500 font-bold">2, 10, 18, 21이상</span>)를 피하세요!
+            </p>
+            <div class="flex gap-2">
+                <button onclick="openRuleModal()" class="px-4 py-2 bg-[#e2e8f0] hover:bg-[#cbd5e1] border-2 border-[#334155] rounded-xl font-bold text-[#334155] transition">
+                    📖 게임 규칙
+                </button>
+                <button id="header-reset-btn" onclick="requestResetGame()" class="hidden px-4 py-2 bg-[#fed7aa] hover:bg-[#ffedd5] border-2 border-[#334155] rounded-xl font-bold text-[#ea580c] transition">
+                    🔄 방 리셋
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Lobby / Room Connection Area -->
+    <div id="lobby-screen" class="flex-1 flex items-center justify-center p-4">
+        <div class="bg-white border-4 border-[#334155] rounded-3xl p-6 sm:p-10 max-w-lg w-full shadow-[8px_8px_0px_#334155] text-center">
+            <span class="text-6xl block mb-4">🛸</span>
+            <h2 class="text-3xl font-black text-[#1e293b] mb-2 cute-font">원자 77 멀티플레이 대기실</h2>
+            <p class="text-slate-500 text-sm mb-6">동일한 방 코드를 공유해 여러 기기에서 동시 접속하세요.</p>
+            
+            <!-- Firebase Warning Alert (Visible if configuration is not set up) -->
+            <div id="firebase-warning" class="hidden mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-2xl text-left">
+                <p class="text-xs text-red-800 font-bold mb-1">⚠️ Firebase 설정이 아직 완료되지 않았습니다!</p>
+                <p class="text-[11px] text-red-600 leading-relaxed">
+                    깃허브 배포 전, 소스코드 하단의 <code class="bg-red-100 px-1 rounded">firebaseConfig</code> 변수값에 본인의 Firebase Web 앱 키 값들을 정확히 입력해주어야 네트워크 기능이 켜집니다.
+                </p>
+            </div>
+
+            <div class="space-y-4 mb-6 text-left">
+                <div>
+                    <label class="block text-xs font-black text-slate-500 mb-1">내 닉네임</label>
+                    <input type="text" id="nickname-input" placeholder="닉네임 입력 (최대 8자)" maxlength="8" class="w-full px-4 py-3 bg-slate-50 border-2 border-[#334155] rounded-xl font-bold focus:outline-none focus:bg-slate-100">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <button id="create-room-btn" disabled onclick="createNewRoom()" class="py-3 bg-slate-300 text-slate-500 font-extrabold rounded-xl border-2 border-slate-400 cursor-not-allowed transition-all">
+                        방 만들기 🏠
+                    </button>
+                    <div class="flex flex-col">
+                        <input type="text" id="room-code-input" placeholder="방 코드 입력" class="px-3 py-1.5 text-center bg-slate-50 border-2 border-[#334155] rounded-t-xl font-bold focus:outline-none focus:bg-slate-100 text-sm">
+                        <button id="join-room-btn" disabled onclick="joinRoom()" class="py-1.5 bg-slate-300 text-slate-500 font-extrabold rounded-b-xl border-x-2 border-b-2 border-slate-400 cursor-not-allowed transition-all text-sm">
+                            방 참여하기 🔑
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Connection Status -->
+            <div id="connection-status" class="text-xs text-slate-400 font-semibold italic">
+                네트워크 상태: 대기 중..
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Game Area (Hidden initially) -->
+    <main id="game-screen" class="hidden flex-1 max-w-7xl w-full mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- Left Column: Element Table List (3 cols) -->
+        <section class="lg:col-span-3 bg-white border-4 border-[#334155] rounded-2xl p-4 shadow-[4px_4px_0px_#334155] h-[400px] lg:h-[750px] flex flex-col">
+            <h3 class="text-lg font-bold text-[#334155] border-b-2 border-dashed border-[#e2e8f0] pb-2 mb-3 flex items-center gap-2 justify-between">
+                <span>📋 원소 일람표</span>
+                <span class="text-xs bg-[#fee2e2] text-red-600 px-2 py-0.5 rounded-full font-bold">💣 = 지뢰</span>
+            </h3>
+            <div id="element-list" class="overflow-y-auto flex-1 pr-1 space-y-1.5">
+                <!-- Elements will be dynamically populated here -->
+            </div>
+        </section>
+
+        <!-- Right Column: Board & Hands (9 cols) -->
+        <section class="lg:col-span-9 flex flex-col gap-6">
+            
+            <!-- Room Info & Status Bar -->
+            <div class="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-3 flex flex-wrap justify-between items-center gap-2 text-indigo-900 font-bold text-sm">
+                <div class="flex items-center gap-2">
+                    <span class="bg-indigo-200 text-indigo-800 px-3 py-1 rounded-lg text-xs">ROOM CODE</span>
+                    <span id="room-display-code" class="text-base tracking-wider font-extrabold font-mono">-----</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded-lg">ID: <span id="my-display-id" class="font-mono">...</span></span>
+                    <span id="multi-player-count" class="text-xs">접속 인원: 0/4 명</span>
+                    <button id="start-game-btn" onclick="requestStartGame()" class="hidden px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-black transition">
+                        게임 시작하기 🚀
+                    </button>
+                </div>
+            </div>
+
+            <!-- Dynamic Dashboard and Active State -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+                
+                <!-- Main Status Monitor (Center Board) -->
+                <div class="md:col-span-8 bg-[#fffbeb] border-4 border-[#334155] rounded-3xl p-6 shadow-[6px_6px_0px_#334155] flex flex-col items-center justify-center relative overflow-hidden min-h-[280px]">
+                    <!-- Background atomic design -->
+                    <div class="absolute -right-8 -bottom-8 text-9xl text-[#fef3c7] opacity-60 select-none font-bold">77</div>
+                    
+                    <span class="text-sm uppercase tracking-wider font-extrabold text-[#d97706] mb-1">CURRENT ACCUMULATED NUMBER</span>
+                    <h2 class="text-3xl font-black text-[#1e293b] mb-4">현재 누적 양성자 수</h2>
+
+                    <!-- Giant Number and Element Match -->
+                    <div class="flex flex-col items-center z-10">
+                        <div class="flex items-baseline gap-2">
+                            <span id="current-number" class="text-8xl font-black text-[#b45309] tracking-tight transition-transform duration-300 scale-100">0</span>
+                            <span class="text-2xl font-bold text-[#78350f]">번</span>
+                        </div>
+                        
+                        <!-- Element Detail Container -->
+                        <div id="element-badge" class="mt-4 px-6 py-3 bg-[#fef3c7] border-2 border-[#b45309] rounded-2xl flex items-center gap-3 transition-all duration-300">
+                            <span id="elem-symbol" class="text-3xl font-black text-[#b45309]">H</span>
+                            <div class="h-6 w-0.5 bg-[#b45309] opacity-30"></div>
+                            <span id="elem-name" class="text-xl font-bold text-[#78350f]">수소</span>
+                            <span id="elem-en-name" class="text-xs bg-white/50 px-2 py-0.5 rounded text-[#78350f]/70">Hydrogen</span>
+                        </div>
+                    </div>
+
+                    <!-- Flow Direction Indicator -->
+                    <div class="absolute top-4 left-4 flex items-center gap-2 bg-[#fef9c3] border border-[#f59e0b] px-3 py-1.5 rounded-full text-xs font-bold text-[#b45309]">
+                        <span id="flow-dir-icon">➡️</span>
+                        <span id="flow-dir-text">시계 방향 진행</span>
+                    </div>
+
+                    <!-- Next Danger Hint -->
+                    <div class="absolute bottom-4 left-4 text-xs font-bold text-[#ef4444] flex items-center gap-1 bg-red-50 border border-red-200 px-2.5 py-1 rounded-full">
+                        <span>⚠️ 주의 번호:</span>
+                        <span class="font-black">2(He), 10(Ne), 18(Ar), 21(Sc)이상</span>
+                    </div>
+                </div>
+
+                <!-- Players Status Grid -->
+                <div class="md:col-span-4 grid grid-cols-2 md:grid-cols-1 gap-3">
+                    <!-- Player 1 -->
+                    <div id="p-box-0" class="bg-white border-2 border-dashed border-slate-200 rounded-2xl p-3 flex flex-col justify-between transition-all duration-300">
+                        <div class="flex justify-between items-center">
+                            <span id="p-name-0" class="font-bold text-slate-400">빈 자리</span>
+                            <span id="p-crown-0" class="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-black hidden">방장</span>
+                        </div>
+                        <div class="flex justify-between items-end mt-2">
+                            <span class="text-xs text-slate-400 font-medium">카드 <span id="p-card-count-0" class="font-bold">0</span>장</span>
+                            <span id="p-status-0" class="text-xs px-2 py-0.5 bg-slate-100 text-slate-400 rounded-full font-bold">대기</span>
+                        </div>
+                    </div>
+                    <!-- Player 2 -->
+                    <div id="p-box-1" class="bg-white border-2 border-dashed border-slate-200 rounded-2xl p-3 flex flex-col justify-between transition-all duration-300">
+                        <div class="flex justify-between items-center">
+                            <span id="p-name-1" class="font-bold text-slate-400">빈 자리</span>
+                            <span id="p-crown-1" class="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-black hidden">방장</span>
+                        </div>
+                        <div class="flex justify-between items-end mt-2">
+                            <span class="text-xs text-slate-400 font-medium">카드 <span id="p-card-count-1" class="font-bold">0</span>장</span>
+                            <span id="p-status-1" class="text-xs px-2 py-0.5 bg-slate-100 text-slate-400 rounded-full font-bold">대기</span>
+                        </div>
+                    </div>
+                    <!-- Player 3 -->
+                    <div id="p-box-2" class="bg-white border-2 border-dashed border-slate-200 rounded-2xl p-3 flex flex-col justify-between transition-all duration-300">
+                        <div class="flex justify-between items-center">
+                            <span id="p-name-2" class="font-bold text-slate-400">빈 자리</span>
+                            <span id="p-crown-2" class="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-black hidden">방장</span>
+                        </div>
+                        <div class="flex justify-between items-end mt-2">
+                            <span class="text-xs text-slate-400 font-medium">카드 <span id="p-card-count-2" class="font-bold">0</span>장</span>
+                            <span id="p-status-2" class="text-xs px-2 py-0.5 bg-slate-100 text-slate-400 rounded-full font-bold">대기</span>
+                        </div>
+                    </div>
+                    <!-- Player 4 -->
+                    <div id="p-box-3" class="bg-white border-2 border-dashed border-slate-200 rounded-2xl p-3 flex flex-col justify-between transition-all duration-300">
+                        <div class="flex justify-between items-center">
+                            <span id="p-name-3" class="font-bold text-slate-400">빈 자리</span>
+                            <span id="p-crown-3" class="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-black hidden">방장</span>
+                        </div>
+                        <div class="flex justify-between items-end mt-2">
+                            <span class="text-xs text-slate-400 font-medium">카드 <span id="p-card-count-3" class="font-bold">0</span>장</span>
+                            <span id="p-status-3" class="text-xs px-2 py-0.5 bg-slate-100 text-slate-400 rounded-full font-bold">대기</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Active Hand Interface -->
+            <div class="bg-white border-4 border-[#334155] rounded-3xl p-6 shadow-[6px_6px_0px_#334155] flex flex-col">
+                <div class="flex flex-col sm:flex-row justify-between items-center border-b-2 border-dashed border-[#e2e8f0] pb-4 mb-6 gap-2">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">🖐️</span>
+                        <h4 class="text-xl font-black text-[#1e293b] flex items-center gap-2">
+                            <span id="current-hand-owner-name" class="text-red-500 text-2xl cute-font">나의 보유 카드</span>
+                        </h4>
+                    </div>
+                    <span id="turn-guide-badge" class="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full">다른 플레이어들이 모이기를 기다리고 있습니다.</span>
+                </div>
+
+                <!-- Cards Container -->
+                <div id="hand-cards-container" class="grid grid-cols-5 gap-3 sm:gap-4 md:gap-6 py-2 min-h-[160px]">
+                    <!-- Dynamically rendered custom cards -->
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-12 bg-[#1e293b] text-slate-400 text-center py-6 text-sm border-t-4 border-[#0f172a]">
+        <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <p>© 2026 원자 77 학습형 보드게임. 즐겁게 학습하는 주기율표와 원소들 🧬</p>
+            <p class="text-xs">이 게임은 중2 과학 교과과정 원소 기호 및 번호 학습 보조 도구로 디자인되었습니다.</p>
+        </div>
+    </footer>
+
+    <!-- Exploding Defeat Overlay Alert -->
+    <div id="defeat-modal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden backdrop-blur-sm">
+        <div class="bg-white border-4 border-black rounded-3xl p-8 max-w-md w-full shadow-[8px_8px_0px_rgba(0,0,0,0.15)] text-center relative overflow-hidden transform scale-95 transition-transform duration-300">
+            <!-- Sparks and Explosions -->
+            <div class="text-7xl mb-4 animate-bounce">💥</div>
+            <h2 class="text-3xl font-black text-red-600 mb-2 cute-font" id="defeat-title">쾅!!!! 폭탄 폭발!</h2>
+            
+            <p class="text-slate-600 mb-6 font-medium leading-relaxed">
+                <span id="loser-name" class="font-extrabold text-[#1e293b]">플레이어</span>님이 
+                <span id="bomb-element-info" class="text-red-500 font-black underline decoration-dashed underline-offset-4">10번 네온(Ne)</span> 원자핵 지뢰를 밟아 탈락하였습니다!
+            </p>
+
+            <div class="bg-red-50 border-2 border-red-200 rounded-2xl p-4 mb-6">
+                <p class="text-xs text-red-800 font-bold mb-1">💡 원소 기억하기</p>
+                <p id="defeat-learning-tip" class="text-sm font-semibold text-slate-700">네온(Ne)은 18족 비활성 기체로 빛나는 조명 등에 쓰입니다.</p>
+            </div>
+
+            <button id="modal-close-btn" onclick="closeDefeatModal()" class="w-full py-3.5 bg-red-500 hover:bg-red-600 text-white font-extrabold text-lg rounded-2xl border-2 border-black shadow-[4px_4px_0px_#000] active:translate-y-1 active:shadow-none transition-all">
+                방장 리셋 기다리기 🔄
+            </button>
+        </div>
+    </div>
+
+    <!-- Rules Modal -->
+    <div id="rule-modal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden backdrop-blur-sm">
+        <div class="bg-white border-4 border-[#334155] rounded-3xl p-6 sm:p-8 max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-[8px_8px_0px_#334155]">
+            <div class="flex justify-between items-center border-b-2 border-dashed border-slate-200 pb-3 mb-4">
+                <h3 class="text-2xl font-black text-[#1e293b] cute-font">🧪 원자 77 게임 규칙</h3>
+                <button onclick="closeRuleModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+            </div>
+            
+            <div class="space-y-4 text-sm sm:text-base text-slate-700 font-medium leading-relaxed">
+                <p><strong>[원자 77]</strong>은 카드를 차례대로 한 장씩 내어 원소 번호를 누적하며 지뢰 원소를 피해 살아남는 서바이벌 학습용 보드게임입니다.</p>
+                
+                <div class="bg-amber-50 p-3 rounded-xl border border-amber-200">
+                    <p class="font-bold text-amber-800 text-sm mb-1">🎮 플레이 정보</p>
+                    <ul class="list-disc pl-5 text-xs text-amber-900 space-y-1">
+                        <li>각 플레이어는 처음에 5장의 카드를 손에 쥐고 시작합니다.</li>
+                        <li>카드를 한 장 내면, 다음 플레이어로 턴이 넘어가며, 덱에서 1장을 자동으로 신규 충전 받습니다.</li>
+                    </ul>
+                </div>
+
+                <h4 class="font-extrabold text-[#1e293b] text-base mt-2">🃏 카드 종류 및 기능</h4>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="bg-blue-50 p-2.5 rounded-lg border border-blue-200">
+                        <p class="font-bold text-blue-800">🔢 숫자 카드 (0, 1, 2, 3)</p>
+                        <p class="text-slate-500 mt-0.5">현재 누적 양성자 수(원소 번호)에 숫자만큼 더합니다.</p>
+                    </div>
+                    <div class="bg-purple-50 p-2.5 rounded-lg border border-purple-200">
+                        <p class="font-bold text-purple-800">⏭️ 점프 카드</p>
+                        <p class="text-slate-500 mt-0.5">누적 값을 바꾸지 않고 즉시 다음 플레이어로 턴을 넘깁니다.</p>
+                    </div>
+                    <div class="bg-pink-50 p-2.5 rounded-lg border border-pink-200">
+                        <p class="font-bold text-pink-800">🔄 턴 카드</p>
+                        <p class="text-slate-500 mt-0.5">게임의 진행 방향(시계방향 ↔ 반시계방향)을 반전시킵니다.</p>
+                    </div>
+                    <div class="bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                        <p class="font-bold text-amber-800">➖ -1 카드</p>
+                        <p class="text-slate-500 mt-0.5">누적 값에서 1을 뺍니다. 단, 0 미만으로는 내려가지 않습니다.</p>
+                    </div>
+                </div>
+
+                <h4 class="font-extrabold text-red-600 text-base mt-2 flex items-center gap-1">💣 패배 조건 (지뢰 원소)</h4>
+                <p class="text-xs sm:text-sm">카드를 낸 결과 누적 수치가 아래의 원소 번호에 딱 맞아떨어지거나, 21번을 초과하면 폭탄이 폭발해 즉시 패배합니다.</p>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                    <div class="bg-red-50 p-2 rounded-xl border border-red-200">
+                        <span class="block text-lg">💣</span>
+                        <span class="text-xs font-bold text-red-700">2번 헬륨 (He)</span>
+                    </div>
+                    <div class="bg-red-50 p-2 rounded-xl border border-red-200">
+                        <span class="block text-lg">💣</span>
+                        <span class="text-xs font-bold text-red-700">10번 네온 (Ne)</span>
+                    </div>
+                    <div class="bg-red-50 p-2 rounded-xl border border-red-200">
+                        <span class="block text-lg">💣</span>
+                        <span class="text-xs font-bold text-red-700">18번 아르곤 (Ar)</span>
+                    </div>
+                    <div class="bg-red-50 p-2 rounded-xl border border-red-200">
+                        <span class="block text-lg">💥</span>
+                        <span class="text-xs font-bold text-red-700">21번 스칸듐 (Sc) 이상</span>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="closeRuleModal()" class="mt-6 w-full py-3 bg-[#334155] hover:bg-[#1e293b] text-white font-extrabold rounded-2xl transition">
+                알겠습니다! 🏁
+            </button>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // ==========================================
+        // ⚙️ [필독] 깃허브 배포 시 본인의 Firebase 설정값을 아래에 붙여넣어주세요!
+        // ==========================================
+        let firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'atom77-multiplayer';
+
+        // 플랫폼 실행 환경 자동 감지 및 안전장치
+        if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+            try {
+                firebaseConfig = JSON.parse(__firebase_config);
+            } catch (e) {
+                console.error("Firebase config parse error: ", e);
+            }
+        }
+
+        // Firebase 설정 검사 및 경고 유도
+        if (firebaseConfig.apiKey === "YOUR_API_KEY") {
+            document.getElementById('firebase-warning').classList.remove('hidden');
+            document.getElementById('connection-status').innerText = "⚠️ Firebase 설정이 비어있습니다. index.html 코드를 수정해주세요.";
+        }
+
+        // Initialize Firebase Services
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let myUserId = "";
+        let currentRoomId = null;
+        let unsubscribeRoom = null;
+        let roomState = null;
+
+        // 원소 사전 정보
+        const elementDictionary = {
+            0: { symbol: 'N/A', name: '없음', en: 'None', desc: '아직 수소가 탄생하기 전입니다.' },
+            1: { symbol: 'H', name: '수소', en: 'Hydrogen', desc: '우주에서 가장 흔하고 가벼운 원소입니다.' },
+            2: { symbol: 'He', name: '헬륨', en: 'Helium', desc: '가장 안전한 가벼운 비활성 기체입니다.', isBomb: true },
+            3: { symbol: 'Li', name: '리튬', en: 'Lithium', desc: '전기 배터리에 널리 활용되는 금속입니다.' },
+            4: { symbol: 'Be', name: '베릴륨', en: 'Beryllium', desc: '가벼우면서도 매우 단단한 금속 원소입니다.' },
+            5: { symbol: 'B', name: '붕소', en: 'Boron', desc: '식물 성장에 꼭 필요하며 내열 유리에 사용됩니다.' },
+            6: { symbol: 'C', name: '탄소', en: 'Carbon', desc: '지구상 모든 생명체의 중심을 이루는 원소입니다.' },
+            7: { symbol: 'N', name: '질소', en: 'Nitrogen', desc: '공기의 약 78%를 차지하는 비반응성 기체입니다.' },
+            8: { symbol: 'O', name: '산소', en: 'Oxygen', desc: '생물의 호흡과 연소에 꼭 필요한 기체입니다.' },
+            9: { symbol: 'F', name: '플루오린', en: 'Fluorine', desc: '충치 예방을 위해 치약에 들어가는 강력한 원소입니다.' },
+            10: { symbol: 'Ne', name: '네온', en: 'Neon', desc: '붉은 광채로 밤거리를 꾸며주는 아름다운 비활성 기체입니다.', isBomb: true },
+            11: { symbol: 'Na', name: '나트륨', en: 'Sodium', desc: '소금의 주성분이며, 물에 매우 강하게 반응합니다.' },
+            12: { symbol: 'Mg', name: '마그네슘', en: 'Magnesium', desc: '가벼운 합금 소재 및 엽록소의 필수 성분입니다.' },
+            13: { symbol: 'Al', name: '알루미늄', en: 'Aluminum', desc: '가볍고 녹슬지 않아 음료 캔 등에 대량 쓰입니다.' },
+            14: { symbol: 'Si', name: '규소', en: 'Silicon', desc: '반도체 칩을 만드는 데 쓰이는 핵심 원소입니다.' },
+            15: { symbol: 'P', name: '인', en: 'Phosphorus', desc: '성냥과 우리 몸의 뼈, DNA 구성에 꼭 필요합니다.' },
+            16: { symbol: 'S', name: '황', en: 'Sulfur', desc: '온천의 독특한 향을 유발하고, 화약 원료로 쓰입니다.' },
+            17: { symbol: 'Cl', name: '염소', en: 'Chlorine', desc: '수영장 소독이나 락스에 들어가는 소독용 원소입니다.' },
+            18: { symbol: 'Ar', name: '아르곤', en: 'Argon', desc: '전구 내부 충전 기체나 불꽃 용접에 쓰이는 비활성 기체입니다.', isBomb: true },
+            19: { symbol: 'K', name: '칼륨', en: 'Potassium', desc: '바나나에 풍부하며 몸속 수분과 전해질을 조절합니다.' },
+            20: { symbol: 'Ca', name: '칼슘', en: 'Calcium', desc: '뼈와 이빨을 단단하게 만들어 주는 고마운 원소입니다.' },
+            21: { symbol: 'Sc', name: '스칸듐', en: 'Scandium', desc: '강력한 합금 재료로 쓰이는 고가의 희토류 원소입니다.', isBomb: true }
+        };
+
+        const CARD_TYPES = {
+            NUM_0: { label: '+0', value: 0, type: 'number', color: 'bg-emerald-100 border-emerald-500 text-emerald-700 hover:bg-emerald-200' },
+            NUM_1: { label: '+1', value: 1, type: 'number', color: 'bg-sky-100 border-sky-500 text-sky-700 hover:bg-sky-200' },
+            NUM_2: { label: '+2', value: 2, type: 'number', color: 'bg-indigo-100 border-indigo-500 text-indigo-700 hover:bg-indigo-200' },
+            NUM_3: { label: '+3', value: 3, type: 'number', color: 'bg-violet-100 border-violet-500 text-violet-700 hover:bg-violet-200' },
+            JUMP: { label: '점프 ⏭️', value: 'jump', type: 'special', color: 'bg-amber-100 border-amber-500 text-amber-700 hover:bg-amber-200' },
+            TURN: { label: '턴 🔄', value: 'turn', type: 'special', color: 'bg-fuchsia-100 border-fuchsia-500 text-fuchsia-700 hover:bg-fuchsia-200' },
+            MINUS: { label: '-1 ➖', value: -1, type: 'special', color: 'bg-pink-100 border-pink-500 text-pink-700 hover:bg-pink-200' }
+        };
+
+        const DECK_POOL = [
+            'NUM_0', 'NUM_0', 'NUM_1', 'NUM_1', 'NUM_1', 'NUM_1', 'NUM_2', 'NUM_2', 'NUM_2', 'NUM_3', 'NUM_3',
+            'JUMP', 'JUMP', 'TURN', 'TURN', 'MINUS', 'MINUS'
+        ];
+
+        // Auth initialization
+        const initAuth = async () => {
+            if (firebaseConfig.apiKey === "YOUR_API_KEY") return;
+            document.getElementById('connection-status').innerText = "사용자 보안 환경 구성 중...";
+            
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Auth initialization failed: ", error);
+                document.getElementById('connection-status').innerText = "⚠️ 네트워크 초기화에 실패했습니다. Firebase 콘솔 설정을 확인하세요.";
+            }
+        };
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                myUserId = user.uid;
+                document.getElementById('my-display-id').innerText = myUserId.slice(0, 6);
+                document.getElementById('connection-status').innerText = "연결 완료. 닉네임을 설정하고 시작할 수 있습니다! ✨";
+                
+                // 인증 성공 후 버튼 활성화
+                const createBtn = document.getElementById('create-room-btn');
+                const joinBtn = document.getElementById('join-room-btn');
+                
+                createBtn.disabled = false;
+                createBtn.className = "py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-extrabold rounded-xl border-2 border-black shadow-[3px_3px_0px_#000] active:translate-y-1 active:shadow-none transition-all cursor-pointer";
+                
+                joinBtn.disabled = false;
+                joinBtn.className = "py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold rounded-b-xl border-x-2 border-b-2 border-black shadow-[3px_3px_0px_#000] active:translate-y-1 active:shadow-none transition-all text-sm cursor-pointer";
+            }
+        });
+
+        initAuth();
+
+        // 1. Element Sidebar List Rendering
+        function renderElementTable() {
+            const listContainer = document.getElementById('element-list');
+            listContainer.innerHTML = '';
+
+            for (let i = 1; i <= 21; i++) {
+                const elem = elementDictionary[i];
+                const isBomb = elem.isBomb;
+                
+                const itemDiv = document.createElement('div');
+                itemDiv.id = `sidebar-elem-${i}`;
+                itemDiv.className = `flex items-center justify-between p-2 rounded-xl border-2 transition-all duration-300 ${
+                    isBomb 
+                    ? 'bg-red-50 border-red-200' 
+                    : 'bg-white border-slate-100'
+                }`;
+
+                itemDiv.innerHTML = `
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] ${isBomb ? 'bg-red-200 text-red-700' : 'bg-slate-100 text-slate-600'}">
+                            ${i}
+                        </span>
+                        <div>
+                            <span class="font-bold text-slate-800 text-xs sm:text-sm">${elem.name}</span>
+                            <span class="text-[10px] text-slate-400 ml-1">${elem.symbol}</span>
+                        </div>
+                    </div>
+                    <div>
+                        ${isBomb ? '<span class="text-xs">💣</span>' : '<span class="text-[10px] text-slate-400">안전</span>'}
+                    </div>
+                `;
+                listContainer.appendChild(itemDiv);
+            }
+        }
+
+        function highlightElementTable(currentNum) {
+            for (let i = 1; i <= 21; i++) {
+                const el = document.getElementById(`sidebar-elem-${i}`);
+                if (!el) continue;
+                const elemData = elementDictionary[i];
+                if (elemData.isBomb) {
+                    el.className = 'flex items-center justify-between p-2 rounded-xl border-2 bg-red-50 border-red-200 transition-all duration-300';
+                } else {
+                    el.className = 'flex items-center justify-between p-2 rounded-xl border-2 bg-white border-slate-100 transition-all duration-300';
+                }
+            }
+
+            if (currentNum >= 1 && currentNum <= 21) {
+                const activeEl = document.getElementById(`sidebar-elem-${currentNum}`);
+                if (activeEl) {
+                    const isBomb = elementDictionary[currentNum].isBomb;
+                    activeEl.className = `flex items-center justify-between p-2 rounded-xl border-4 transition-all duration-300 ${
+                        isBomb 
+                        ? 'border-red-500 bg-red-100 shadow-md scale-[1.02]' 
+                        : 'border-[#334155] bg-amber-50 shadow-md scale-[1.02]'
+                    }`;
+                    activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            }
+        }
+
+        // Helper: Card Drop Pool
+        function getRandomCardKey() {
+            const randomIndex = Math.floor(Math.random() * DECK_POOL.length);
+            return DECK_POOL[randomIndex];
+        }
+
+        // 2. 방 생성 및 진입
+        window.createNewRoom = async function() {
+            if (!myUserId) return;
+            const nickname = document.getElementById('nickname-input').value.trim() || '탐험가';
+            const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+            
+            // Initial Empty Room Structure (Strict Path Rule 1)
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode);
+            
+            const initialRoomData = {
+                roomCode: roomCode,
+                hostId: myUserId,
+                accumulatedNumber: 0,
+                direction: 1, // 1: 시계, -1: 반시계
+                activePlayerIndex: 0,
+                isStarted: false,
+                isFinished: false,
+                loserId: "",
+                lastUpdated: Date.now(),
+                playersList: [myUserId],
+                playersData: {
+                    [myUserId]: {
+                        id: myUserId,
+                        name: nickname,
+                        hand: [getRandomCardKey(), getRandomCardKey(), getRandomCardKey(), getRandomCardKey(), getRandomCardKey()],
+                        isEliminated: false
+                    }
+                }
+            };
+
+            try {
+                await setDoc(roomRef, initialRoomData);
+                connectToRoom(roomCode);
+            } catch (err) {
+                console.error("Room creation error: ", err);
+                alert("방 생성 중 오류가 발생했습니다. 다시 시도해주세요.");
+            }
+        };
+
+        window.joinRoom = async function() {
+            if (!myUserId) return;
+            const roomCode = document.getElementById('room-code-input').value.trim().toUpperCase();
+            const nickname = document.getElementById('nickname-input').value.trim() || '탐험가';
+            
+            if (!roomCode) {
+                alert("방 코드를 입력하세요.");
+                return;
+            }
+
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode);
+            
+            try {
+                const snap = await getDoc(roomRef);
+                if (!snap.exists()) {
+                    alert("존재하지 않는 방 코드입니다.");
+                    return;
+                }
+
+                const data = snap.data();
+                if (data.isStarted) {
+                    alert("이미 게임이 진행 중인 방입니다.");
+                    return;
+                }
+                if (data.playersList.length >= 4) {
+                    alert("방이 꽉 찼습니다. (최대 4인)");
+                    return;
+                }
+
+                if (!data.playersList.includes(myUserId)) {
+                    const updatedList = [...data.playersList, myUserId];
+                    const updatedPlayersData = { ...data.playersData };
+                    updatedPlayersData[myUserId] = {
+                        id: myUserId,
+                        name: nickname,
+                        hand: [getRandomCardKey(), getRandomCardKey(), getRandomCardKey(), getRandomCardKey(), getRandomCardKey()],
+                        isEliminated: false
+                    };
+
+                    await updateDoc(roomRef, {
+                        playersList: updatedList,
+                        playersData: updatedPlayersData,
+                        lastUpdated: Date.now()
+                    });
+                }
+
+                connectToRoom(roomCode);
+            } catch (err) {
+                console.error("Room Join Error:", err);
+                alert("방 참가 과정에서 에러가 발생했습니다.");
+            }
+        };
+
+        // 3. Firestore 실시간 리스너 바인딩
+        function connectToRoom(roomCode) {
+            currentRoomId = roomCode;
+            document.getElementById('lobby-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            document.getElementById('room-display-code').innerText = roomCode;
+
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode);
+
+            unsubscribeRoom = onSnapshot(roomRef, (snapshot) => {
+                if (snapshot.exists()) {
+                    roomState = snapshot.data();
+                    syncUI();
+                } else {
+                    alert("방이 해체되었거나 정보를 찾을 수 없습니다.");
+                    exitRoom();
+                }
+            }, (error) => {
+                console.error("Snapshot error:", error);
+            });
+        }
+
+        // 4. 모든 플레이어 기기 상태 실시간 동기화 UI 업데이트
+        function syncUI() {
+            if (!roomState) return;
+
+            // 누적 원자 번호 갱신
+            const accNum = roomState.accumulatedNumber;
+            document.getElementById('current-number').innerText = accNum;
+
+            // 현재 번호에 맞는 원소 배지 출력
+            let currentElem = elementDictionary[accNum];
+            if (!currentElem) {
+                if (accNum >= 21) {
+                    currentElem = { symbol: '💣', name: '임계 초과!', en: 'Overloaded', desc: '원소 폭발 한계를 넘어섰습니다!' };
+                } else {
+                    currentElem = elementDictionary[0];
+                }
+            }
+            document.getElementById('elem-symbol').innerText = currentElem.symbol;
+            document.getElementById('elem-name').innerText = currentElem.name;
+            document.getElementById('elem-en-name').innerText = currentElem.en;
+
+            // 진행 방향 갱신
+            const flowIcon = document.getElementById('flow-dir-icon');
+            const flowText = document.getElementById('flow-dir-text');
+            if (roomState.direction === 1) {
+                flowIcon.innerText = '➡️';
+                flowText.innerText = '시계 방향 진행';
+            } else {
+                flowIcon.innerText = '⬅️';
+                flowText.innerText = '반시계 방향 진행';
+            }
+
+            // 호스트에 한해서만 특정 컨트롤 기능 노출
+            const isHost = (roomState.hostId === myUserId);
+            const startBtn = document.getElementById('start-game-btn');
+            const resetBtn = document.getElementById('header-reset-btn');
+            
+            if (isHost) {
+                resetBtn.classList.remove('hidden');
+                if (!roomState.isStarted) {
+                    startBtn.classList.remove('hidden');
+                } else {
+                    startBtn.classList.add('hidden');
+                }
+            } else {
+                resetBtn.classList.add('hidden');
+                startBtn.classList.add('hidden');
+            }
+
+            // 플레이어 카드 카운터 & 상태 보드 싱글 동기화
+            const pList = roomState.playersList;
+            const pData = roomState.playersData;
+
+            document.getElementById('multi-player-count').innerText = `접속 인원: ${pList.length}/4 명`;
+
+            for (let i = 0; i < 4; i++) {
+                const box = document.getElementById(`p-box-${i}`);
+                const nameLabel = document.getElementById(`p-name-${i}`);
+                const crown = document.getElementById(`p-crown-${i}`);
+                const cardCount = document.getElementById(`p-card-count-${i}`);
+                const statusLabel = document.getElementById(`p-status-${i}`);
+
+                if (i < pList.length) {
+                    const pId = pList[i];
+                    const playerObj = pData[pId];
+
+                    nameLabel.innerText = playerObj.name;
+                    nameLabel.classList.remove('text-slate-400');
+                    nameLabel.classList.add('text-[#1e293b]');
+                    
+                    if (pId === roomState.hostId) {
+                        crown.classList.remove('hidden');
+                    } else {
+                        crown.classList.add('hidden');
+                    }
+
+                    cardCount.innerText = playerObj.hand ? playerObj.hand.length : 0;
+
+                    // 액티브 턴 및 스타일링 동기화
+                    box.className = "bg-white border-2 border-[#334155] rounded-2xl p-3 flex flex-col justify-between transition-all duration-300 shadow-[3px_3px_0px_#334155]";
+                    
+                    if (roomState.isStarted) {
+                        const activeId = pList[roomState.activePlayerIndex];
+                        if (pId === activeId) {
+                            box.classList.add('active-player-box');
+                            statusLabel.className = 'text-xs px-2.5 py-1 bg-red-100 text-red-600 rounded-full font-black animate-pulse';
+                            statusLabel.innerText = '★ 차례 ★';
+                        } else {
+                            statusLabel.className = 'text-xs px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full font-bold';
+                            statusLabel.innerText = '대기중';
+                        }
+                    } else {
+                        statusLabel.className = 'text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-bold';
+                        statusLabel.innerText = '준비완료';
+                    }
+
+                } else {
+                    // 빈 슬롯
+                    nameLabel.innerText = "빈 자리";
+                    nameLabel.classList.add('text-slate-400');
+                    nameLabel.classList.remove('text-[#1e293b]');
+                    crown.classList.add('hidden');
+                    cardCount.innerText = "0";
+                    statusLabel.className = 'text-xs px-2 py-0.5 bg-slate-50 text-slate-400 rounded-full';
+                    statusLabel.innerText = '대기';
+                    box.className = "bg-white border-2 border-dashed border-slate-200 rounded-2xl p-3 flex flex-col justify-between transition-all duration-300";
+                }
+            }
+
+            // 왼쪽 사이드바 일람표 강조 업데이트
+            highlightElementTable(accNum);
+
+            // 내 손패 렌더링 (보안 유지 및 동기화)
+            renderMyHand();
+
+            // 패배 모달 활성화 감지
+            if (roomState.isFinished) {
+                triggerDefeatUI();
+            } else {
+                document.getElementById('defeat-modal').classList.add('hidden');
+            }
+        }
+
+        // 5. 로그인된 유저 개인 전용 손패 렌더링
+        function renderMyHand() {
+            const container = document.getElementById('hand-cards-container');
+            container.innerHTML = '';
+
+            const myData = roomState.playersData[myUserId];
+            const turnGuide = document.getElementById('turn-guide-badge');
+
+            if (!roomState.isStarted) {
+                turnGuide.innerText = "방장이 게임을 시작하기를 기다리고 있습니다.";
+                return;
+            }
+
+            const activePlayerId = roomState.playersList[roomState.activePlayerIndex];
+            const isMyTurn = (activePlayerId === myUserId);
+
+            if (isMyTurn) {
+                turnGuide.innerText = "지금은 나의 차례입니다! 카드를 한 장 선택하세요.";
+                turnGuide.className = "text-xs font-black text-red-600 bg-red-100 px-3 py-1.5 rounded-full animate-pulse";
+            } else {
+                const activePlayerName = roomState.playersData[activePlayerId]?.name || "상대";
+                turnGuide.innerText = `${activePlayerName}님의 차례입니다.`;
+                turnGuide.className = "text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full";
+            }
+
+            if (myData && myData.hand) {
+                myData.hand.forEach((cardKey, index) => {
+                    const cardInfo = CARD_TYPES[cardKey];
+                    const cardBtn = document.createElement('button');
+                    
+                    // 내 차례가 아닐 경우 카드 선택 비활성화
+                    if (isMyTurn) {
+                        cardBtn.className = `game-card flex flex-col items-center justify-between p-4 rounded-2xl border-4 border-[#334155] ${cardInfo.color} text-center select-none cursor-pointer h-36 font-black transition-all duration-200 shadow-[4px_4px_0px_#334155]`;
+                        cardBtn.onclick = () => selectCard(index);
+                    } else {
+                        cardBtn.className = `flex flex-col items-center justify-between p-4 rounded-2xl border-4 border-slate-300 bg-slate-100 text-slate-400 text-center select-none h-36 font-bold opacity-65 cursor-not-allowed`;
+                        cardBtn.disabled = true;
+                    }
+
+                    let cardHeader = (cardInfo.type === 'special') ? "⚡ 특수" : "🧪 결합";
+
+                    cardBtn.innerHTML = `
+                        <span class="text-[10px] uppercase tracking-widest opacity-60 font-black">${cardHeader}</span>
+                        <span class="text-xl sm:text-2xl tracking-tight my-auto cute-font">${cardInfo.label}</span>
+                        <span class="text-[10px] opacity-70">원소 변화</span>
+                    `;
+
+                    container.appendChild(cardBtn);
+                });
+            }
+        }
+
+        // 6. 호스트 게임 시작 트리거
+        window.requestStartGame = async function() {
+            if (roomState.playersList.length < 2) {
+                alert("최소 2명 이상의 플레이어가 접속해야 게임을 시작할 수 있습니다.");
+                return;
+            }
+            
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId);
+            await updateDoc(roomRef, {
+                isStarted: true,
+                accumulatedNumber: 0,
+                direction: 1,
+                activePlayerIndex: 0,
+                isFinished: false,
+                loserId: "",
+                lastUpdated: Date.now()
+            });
+        };
+
+        // 7. 호스트 또는 플레이어의 방 리셋
+        window.requestResetGame = async function() {
+            if (!currentRoomId) return;
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId);
+            
+            // 모든 플레이어 카드 재분배 및 리셋
+            const freshPlayersData = { ...roomState.playersData };
+            roomState.playersList.forEach(pId => {
+                freshPlayersData[pId].hand = [getRandomCardKey(), getRandomCardKey(), getRandomCardKey(), getRandomCardKey(), getRandomCardKey()];
+                freshPlayersData[pId].isEliminated = false;
+            });
+
+            await updateDoc(roomRef, {
+                accumulatedNumber: 0,
+                direction: 1,
+                activePlayerIndex: 0,
+                isStarted: true,
+                isFinished: false,
+                loserId: "",
+                playersData: freshPlayersData,
+                lastUpdated: Date.now()
+            });
+        };
+
+        // 8. 카드 선택 및 비즈니스 게임 플레이 전송
+        async function selectCard(cardIndex) {
+            if (!currentRoomId || !roomState) return;
+
+            const activePlayerId = roomState.playersList[roomState.activePlayerIndex];
+            if (activePlayerId !== myUserId) return; // 내 차례가 아님 방지 가드
+
+            const myData = roomState.playersData[myUserId];
+            const selectedCardKey = myData.hand[cardIndex];
+            const cardInfo = CARD_TYPES[selectedCardKey];
+
+            // 신규 손패 복사 및 보충
+            const nextHand = [...myData.hand];
+            nextHand.splice(cardIndex, 1);
+            nextHand.push(getRandomCardKey());
+
+            let nextNum = roomState.accumulatedNumber;
+            let nextDirection = roomState.direction;
+
+            if (cardInfo.type === 'number') {
+                nextNum += cardInfo.value;
+            } else if (cardInfo.type === 'special') {
+                if (cardInfo.value === 'turn') {
+                    nextDirection *= -1;
+                } else if (cardInfo.value === -1) {
+                    nextNum = Math.max(0, nextNum - 1);
+                }
+            }
+
+            // 지뢰 조건 분석
+            const isExploded = (nextNum === 2 || nextNum === 10 || nextNum === 18 || nextNum >= 21);
+
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId);
+            
+            // 턴 인덱스 계산
+            let nextActiveIndex = roomState.activePlayerIndex;
+            if (!isExploded) {
+                const totalPlayersCount = roomState.playersList.length;
+                nextActiveIndex = (roomState.activePlayerIndex + nextDirection + totalPlayersCount) % totalPlayersCount;
+            }
+
+            // 데이터 패키징 업로드
+            const updatedPlayersData = { ...roomState.playersData };
+            updatedPlayersData[myUserId] = {
+                ...myData,
+                hand: nextHand
+            };
+
+            await updateDoc(roomRef, {
+                accumulatedNumber: nextNum,
+                direction: nextDirection,
+                activePlayerIndex: nextActiveIndex,
+                playersData: updatedPlayersData,
+                isFinished: isExploded,
+                loserId: isExploded ? myUserId : "",
+                lastUpdated: Date.now()
+            });
+        }
+
+        // 9. 패배(지뢰 작동) 결과 창 연출
+        function triggerDefeatUI() {
+            const loserId = roomState.loserId;
+            const loserObj = roomState.playersData[loserId];
+            const accNum = roomState.accumulatedNumber;
+            
+            let targetElem = elementDictionary[accNum];
+            if (!targetElem) {
+                targetElem = { symbol: 'Sc', name: '스칸듐', en: 'Scandium', desc: '원자번호 21번 이상의 영역은 불안정하여 붕괴됩니다.', isBomb: true };
+            }
+
+            document.getElementById('loser-name').innerText = loserObj ? loserObj.name : "누군가";
+            
+            let displayElementInfo = "";
+            if (accNum >= 21) {
+                displayElementInfo = `${accNum}번 이상 (${targetElem.name})`;
+            } else {
+                displayElementInfo = `${accNum}번 ${targetElem.name}(${targetElem.symbol})`;
+            }
+            document.getElementById('bomb-element-info').innerText = displayElementInfo;
+
+            let learningTip = "";
+            if (accNum === 2) {
+                learningTip = "헬륨(He)은 공기보다 가볍고 반응성이 전혀 없어 폭발하지 않아 비행선이나 풍선에 쓰이는 18족 비활성 기체예요!";
+            } else if (accNum === 10) {
+                learningTip = "네온(Ne)은 전류가 흐르면 아름다운 붉은 빛을 내기 때문에, 광고판 조명으로 널리 사랑받는 18족 비활성 기체예요!";
+            } else if (accNum === 18) {
+                learningTip = "아르곤(Ar)은 공기 중에 질소, 산소 다음으로 세 번째로 흔하며, 전구 속 필라멘트 보호 기체로 사용되는 18족 비활성 기체랍니다!";
+            } else {
+                learningTip = "우리는 보통 1번 수소(H)부터 20번 칼슘(Ca)까지 핵심 원소로 암기합니다! 21번 스칸듐(Sc)부터는 전이 금속의 세계가 펼쳐져요!";
+            }
+            document.getElementById('defeat-learning-tip').innerText = learningTip;
+
+            // 방장만 대결 다시하기 버튼 주도 가능
+            const isHost = (roomState.hostId === myUserId);
+            const closeBtn = document.getElementById('modal-close-btn');
+            if (isHost) {
+                closeBtn.innerText = "대결 다시하기 🔄";
+                closeBtn.disabled = false;
+            } else {
+                closeBtn.innerText = "방장의 재시작을 대기 중.. ⏱️";
+                closeBtn.disabled = true;
+            }
+
+            document.getElementById('defeat-modal').classList.remove('hidden');
+        }
+
+        window.closeDefeatModal = function() {
+            if (roomState.hostId === myUserId) {
+                requestResetGame();
+            }
+        };
+
+        function exitRoom() {
+            if (unsubscribeRoom) unsubscribeRoom();
+            currentRoomId = null;
+            roomState = null;
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('lobby-screen').classList.remove('hidden');
+        }
+
+        // 실행
+        renderElementTable();
+    </script>
+</body>
+</html>
